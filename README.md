@@ -210,3 +210,44 @@ Las dependencias de `Main` hacia las clases concretas quedan en negro: `Main` es
 En `main.py`, el CDT se crea con `date(2026, 9, 30)` (fecha fija ya vencida). El Java original usa `LocalDate.now().plusMonths(6)`. Para ser fiel al código base conviene cambiarlo por una fecha futura relativa, por ejemplo `date.today() + timedelta(days=180)`. No afecta a `salida_original.txt` (en `main.py` el CDT solo se construye, nunca se retira), pero sí importa para la coherencia del dominio y para los bloques siguientes.
 
 **Commit del bloque:** `bloque-1-diagnostico`
+
+
+## Bloque 2 — Refactorización
+
+En este bloque se refactoriza el sistema aplicando los principios SOLID de forma progresiva, manteniendo el comportamiento original del programa.
+
+Después de cada punto de control se compara la salida del programa con `salida_original.txt` para verificar que la refactorización no haya alterado su comportamiento.
+
+### Punto de Control S — Single Responsibility Principle
+
+En el código original, el método `transferir()` de `TransaccionService` concentraba diferentes responsabilidades dentro de una misma clase:
+
+1. Validación del monto.
+2. Cálculo de la comisión.
+3. Movimiento del dinero entre las cuentas.
+4. Persistencia de la transacción.
+5. Generación del comprobante.
+6. Notificación mediante SMS.
+7. Registro de auditoría.
+
+Esta concentración hacía que `TransaccionService` tuviera múltiples razones para cambiar. Por ejemplo, un cambio en el formato del comprobante o en la forma de realizar la auditoría obligaría a modificar la misma clase encargada de coordinar la transferencia.
+
+Para aplicar el principio de Responsabilidad Única (SRP), se separaron varias de estas responsabilidades en clases independientes:
+
+- `ValidadorTransferencia`: se encarga de validar el monto de la transferencia.
+- `CalculadorComision`: se encarga de calcular la comisión según el tipo de transferencia.
+- `GeneradorComprobante`: se encarga de generar e imprimir el comprobante.
+- `AuditorTransferencia`: se encarga de registrar la auditoría de la operación.
+
+De esta forma, `TransaccionService` pasó a encargarse principalmente de coordinar el flujo de una transferencia utilizando los componentes especializados.
+
+#### Estructura después de aplicar SRP
+
+```text
+TransaccionService
+├── ValidadorTransferencia
+├── CalculadorComision
+├── GeneradorComprobante
+├── AuditorTransferencia
+├── OracleRepositorio
+└── SmsGateway
