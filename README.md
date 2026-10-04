@@ -328,3 +328,67 @@ class ProductoBancario(ABC):
     def generar_extracto(self) -> str:
         pass
 ```
+### Control D — Dependency Inversion Principle (DIP)
+
+#### Problema encontrado
+
+Inicialmente, `TransaccionService` creaba directamente sus dependencias de infraestructura:
+
+- `OracleRepositorio`
+- `SmsGateway`
+
+Esto generaba un acoplamiento entre la lógica de negocio y las implementaciones concretas de persistencia y mensajería.
+
+#### Refactorización realizada:
+
+Se crearon las abstracciones:
+
+- `RepositorioTransacciones`
+- `Notificador`
+
+`OracleRepositorio` ahora implementa `RepositorioTransacciones`, mientras que `SmsGateway` implementa `Notificador`.
+
+Posteriormente, `TransaccionService` fue modificado para recibir estas dependencias mediante su constructor.
+
+De esta forma, el servicio ya no decide qué implementación concreta utilizar.
+
+#### Inyección de dependencias
+
+El armado de las dependencias se trasladó a `main.py`.
+
+El programa principal es ahora responsable de crear:
+
+- `OracleRepositorio`
+- `SmsGateway`
+- `ValidadorTransferencia`
+- `CalculadorComision`
+- `GeneradorComprobante`
+- `AuditorTransferencia`
+
+y posteriormente inyectarlos en `TransaccionService`.
+
+Esto permite cambiar las implementaciones sin modificar la lógica del servicio.
+
+#### Prueba con dobles
+
+Para comprobar que la inversión de dependencias funciona, se creó:
+
+`experimentos/experimento2_dip.py`
+
+En este experimento se utilizaron:
+
+- `FakeRepositorio`
+- `FakeNotificador`
+
+en lugar de `OracleRepositorio` y `SmsGateway`.
+
+El resultado fue:
+
+- Saldo de Ana: `$1.850.000`
+- Saldo de Luis: `$650.000`
+- Transacciones guardadas: `1`
+- Notificaciones enviadas: `1`
+
+Además, durante esta prueba no se realizaron conexiones al repositorio Oracle ni al proveedor de SMS.
+
+Esto demuestra que `TransaccionService` puede probarse utilizando dobles de prueba sin depender de las implementaciones concretas de infraestructura.
