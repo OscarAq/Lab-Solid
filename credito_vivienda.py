@@ -1,14 +1,15 @@
 from producto_bancario import ProductoBancario
+from producto_con_intereses import ProductoConIntereses
+from producto_con_cuota import ProductoConCuota
 
-class CreditoVivienda(ProductoBancario):
+
+class CreditoVivienda(
+    ProductoBancario,
+    ProductoConIntereses,
+    ProductoConCuota
+):
     def __init__(self, valor_prestamo: float):
         self._saldo_pendiente = valor_prestamo
-
-    def depositar(self, monto: float) -> None:
-        pass  # No aplica
-
-    def retirar(self, monto: float) -> None:
-        pass  # No aplica
 
     def calcular_intereses(self) -> float:
         return self._saldo_pendiente * 0.011

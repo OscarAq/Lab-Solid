@@ -7,16 +7,18 @@ Repositorio para el Laboratorio de SOLID de la materia Ingeniería de Software I
 
 * Pablo Andres Niño Barreto (pninob@unal.edu.co)
 * Sergio Tovar Vasquez (setovarv@unal.edu.co)
-## Commit Inicial (Bloque 0)
+
+
+## Bloque 0 - Commit Inicial - Traducción de Java a Python 
 Se subió el bloque 0 del laboratorio, que incluye la traducción de los códigos del laboratorio, originalmente en Java y traducidos a Python. La salida del programa principal quedó congelada en `salida_original.txt` como prueba de caracterización.
 
 ---
 
-# Bloque 1 — Diagnóstico
+## Bloque 1 — Diagnóstico
 
 Objetivo: **encontrar los problemas de diseño y medir el "antes"**, sin corregir nada todavía. Todas las evidencias, salidas y métricas de esta sección se obtuvieron ejecutando el código real de este repositorio.
 
-## 1.1 Tabla de hallazgos
+### 1.1 Tabla de hallazgos
 
 Hay al menos un problema por cada letra de SOLID; algunas clases acumulan varios. La columna de **consecuencia** está escrita en términos del negocio (qué le pasa al banco o al cliente).
 
@@ -37,9 +39,9 @@ Hay al menos un problema por cada letra de SOLID; algunas clases acumulan varios
 | `TarjetaCredito.depositar` (`tarjeta_credito.py`, línea 9) | **I** | Método vacío: `pass  # No aplica`. | Una tarjeta de crédito "acepta" un depósito que no hace nada: comportamiento engañoso para quien consume la interfaz. |
 | `CreditoVivienda.depositar` y `CreditoVivienda.retirar` (`credito_vivienda.py`, líneas 7–11) | **I** | Dos métodos vacíos: `pass  # No aplica`. | Mismo riesgo de operación silenciosa que no falla pero tampoco ejecuta nada. |
 
-## 1.2 Dos experimentos
+### 1.2 Dos experimentos
 
-### Experimento 1 — El CDT
+#### Experimento 1 — El CDT
 
 **Qué hicimos:** agregamos el CDT de Ana a la lista de `CobroCuotaManejo.cobrar_mensual`. El script está en `experimentos/experimento1_cdt.py`.
 
@@ -64,7 +66,7 @@ Se cobra la cuota a `001-1` (Ana), el proceso llega al CDT, invoca `retirar()`, 
 
 **Qué pasaría en producción:** si el batch corre de noche sobre **un millón de cuentas** y la cuenta número **500 000 es un CDT**, el proceso cobra correctamente las primeras 499 999, explota en la 500 000 y **deja sin cobrar las 500 000 restantes**. Resultado: cierre contable inconsistente (medio banco cobrado, medio no) y una falla que probablemente nadie note hasta la conciliación. Un único dato "raro" tumba todo el proceso.
 
-### Experimento 2 — La prueba imposible
+#### Experimento 2 — La prueba imposible
 
 **Qué intentamos:** escribir una prueba que verifique que una transferencia a otro banco cobra $7 500 de comisión, **sin conectarse a Oracle ni enviar SMS**. El script está en `experimentos/test_prueba_imposible.py`.
 
@@ -95,7 +97,7 @@ Comisión: $7500.0
 
 Capturar la consola no desacopla nada: seguimos conectando a Oracle y mandando SMS en cada corrida. Este es el síntoma exacto del problema **D (DIP)**, que se resuelve en el Punto de control D del Bloque 2.
 
-## 1.3 Medición "antes"
+### 1.3 Medición "antes"
 
 | Métrica | Antes |
 |---|:---:|
@@ -105,7 +107,7 @@ Capturar la consola no desacopla nada: seguimos conectando a Oracle y mandando S
 | Métodos vacíos o que lanzan excepción por "no aplica" | **3 vacíos** (`TarjetaCredito.depositar`, `CreditoVivienda.depositar`, `CreditoVivienda.retirar`) **+ 1 que lanza excepción** (`CDT.retirar`) |
 | ¿Se puede probar `transferir` sin Oracle ni SMS? | **No** (demostrado en el Experimento 2) |
 
-## 1.4 Diagrama de clases del código original
+### 1.4 Diagrama de clases del código original
 
 Diagrama UML del código base. En **rojo** se marcan las herencias y dependencias problemáticas (las que causan las violaciones SOLID). Este bloque Mermaid se renderiza automáticamente en GitHub.
 
@@ -209,11 +211,6 @@ Las dependencias de `Main` hacia las clases concretas quedan en negro: `Main` es
 
 ---
 
-### Nota pendiente para corregir en Bloque 0 (fidelidad de la traducción)
-
-En `main.py`, el CDT se crea con `date(2026, 9, 30)` (fecha fija ya vencida). El Java original usa `LocalDate.now().plusMonths(6)`. Para ser fiel al código base conviene cambiarlo por una fecha futura relativa, por ejemplo `date.today() + timedelta(days=180)`. No afecta a `salida_original.txt` (en `main.py` el CDT solo se construye, nunca se retira), pero sí importa para la coherencia del dominio y para los bloques siguientes.
-
-**Commit del bloque:** `bloque-1-diagnostico`
 
 
 ## Bloque 2 — Refactorización
@@ -284,9 +281,9 @@ def calcular(self, monto: float, tipo: TipoTransferencia) -> float:
     return tipo.calcular_comision(monto)
 ```
 
-## Control L — Sustitución de la jerarquía de cuentas
+### Punto de Control L — Sustitución de la jerarquía de cuentas
 
-### Problema encontrado
+#### Problema encontrado
 
 La clase `Cuenta` original definía la operación `retirar()`, por lo que todas sus subclases debían cumplir con este comportamiento.
 
@@ -294,7 +291,7 @@ Esto generaba un problema con `CDT`, ya que un CDT no permite retiros antes de s
 
 El problema corresponde al principio de **Liskov Substitution Principle (LSP)**: una subclase debe poder utilizarse donde se espera su clase base sin romper las expectativas del programa.
 
-### Refactorización realizada
+#### Refactorización realizada
 
 Se separó la capacidad de retirar dinero de la clase general `Cuenta`.
 
@@ -306,4 +303,28 @@ Cuenta
    │      └── CuentaAhorros
    │
    └── CDT
+```
+### Control I — Interface Segregation Principle (ISP)
+
+#### Problema encontrado
+
+La interfaz `ProductoBancario` original obligaba a todos los productos a implementar los siguientes métodos:
+
+- `depositar()`
+- `retirar()`
+- `calcular_intereses()`
+- `pagar_cuota()`
+- `generar_extracto()`
+
+Esto generaba métodos que no aplicaban a determinados productos. Por ejemplo, `TarjetaCredito` tenía que implementar `depositar()` aunque esta operación no correspondía a una tarjeta de crédito. De igual manera, `CreditoVivienda` tenía que implementar `depositar()` y `retirar()` aunque estas operaciones no aplicaban a este producto.
+
+#### Refactorización realizada
+
+Se redujo la interfaz `ProductoBancario` para que únicamente defina la operación común a todos los productos:
+
+```python
+class ProductoBancario(ABC):
+    @abstractmethod
+    def generar_extracto(self) -> str:
+        pass
 ```

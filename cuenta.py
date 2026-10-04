@@ -1,4 +1,5 @@
-class Cuenta:
+from producto_bancario import ProductoBancario
+class Cuenta(ProductoBancario):
     def __init__(self, numero: str, titular: str, saldo_inicial: float):
         self._numero = numero
         self._titular = titular
@@ -17,4 +18,7 @@ class Cuenta:
         if monto <= 0:
             raise ValueError("Monto inválido")
         self._saldo += monto
+
+    def generar_extracto(self) -> str:
+        return f"Cuenta - saldo: ${self._saldo}"
 
