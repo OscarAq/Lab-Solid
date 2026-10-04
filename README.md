@@ -282,3 +282,26 @@ Cada una implementa su propia forma de calcular la comisión.
 ```python
 def calcular(self, monto: float, tipo: TipoTransferencia) -> float:
     return tipo.calcular_comision(monto)
+
+## Control L — Sustitución de la jerarquía de cuentas
+
+### Problema encontrado
+
+La clase `Cuenta` original definía la operación `retirar()`, por lo que todas sus subclases debían cumplir con este comportamiento.
+
+Esto generaba un problema con `CDT`, ya que un CDT no permite retiros antes de su fecha de vencimiento. Por lo tanto, `CDT` no puede cumplir correctamente el contrato de una cuenta que permite retirar dinero en cualquier momento.
+
+El problema corresponde al principio de **Liskov Substitution Principle (LSP)**: una subclase debe poder utilizarse donde se espera su clase base sin romper las expectativas del programa.
+
+### Refactorización realizada
+
+Se separó la capacidad de retirar dinero de la clase general `Cuenta`.
+
+Se creó:
+
+```text
+Cuenta
+   ├── CuentaRetirable
+   │      └── CuentaAhorros
+   │
+   └── CDT

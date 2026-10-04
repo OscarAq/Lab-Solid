@@ -1,6 +1,6 @@
 from typing import List
-from cuenta import Cuenta
-
+# pyrefly: ignore [missing-import]
+from cuenta_retirable import CuentaRetirable
 class CobroCuotaManejo:
     CUOTA = 12_900.0
 

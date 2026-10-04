@@ -18,7 +18,3 @@ class Cuenta:
             raise ValueError("Monto inválido")
         self._saldo += monto
 
-    def retirar(self, monto: float) -> None:
-        if monto > self._saldo:
-            raise RuntimeError("Saldo insuficiente")
-        self._saldo -= monto

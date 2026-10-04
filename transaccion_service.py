@@ -31,7 +31,6 @@ class TransaccionService:
 
         # 2. Cálculo de la comisión
         comision = self._calculador_comision.calcular(monto, tipo)
-
         # 3. Movimiento del dinero
         origen.retirar(monto + comision)
         destino.depositar(monto)
