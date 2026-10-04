@@ -392,3 +392,23 @@ El resultado fue:
 Además, durante esta prueba no se realizaron conexiones al repositorio Oracle ni al proveedor de SMS.
 
 Esto demuestra que `TransaccionService` puede probarse utilizando dobles de prueba sin depender de las implementaciones concretas de infraestructura.
+
+## Bloque 3 — Pruebas unitarias
+
+### Pruebas implementadas
+
+Se utilizó `pytest` junto con dobles de prueba (`FakeRepositorio` y `FakeNotificador`) para probar `TransaccionService` sin conectarse a Oracle ni enviar SMS.
+
+Se implementaron las cinco pruebas solicitadas:
+
+1. **Transferencia al mismo banco:** verifica que no se cobre comisión y que el monto transferido se descuente y deposite correctamente.
+2. **Transferencia a otro banco:** verifica una comisión de `$7.500` y que se descuente del origen el monto más la comisión.
+3. **Saldo insuficiente:** verifica que la operación sea rechazada, que los saldos no cambien y que no se guarde ni notifique la transferencia.
+4. **Transferencia exitosa:** verifica que la transacción se guarde exactamente una vez y que se genere exactamente una notificación.
+5. **Tipo de transferencia desconocido:** verifica que la operación sea rechazada y que el saldo de origen permanezca sin cambios.
+
+### Resultado
+
+Las cinco pruebas fueron ejecutadas mediante `pytest`:
+
+![Resultado de las 5 pruebas](tests/SS_5_tests.jpg)
