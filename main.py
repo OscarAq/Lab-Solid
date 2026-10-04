@@ -5,6 +5,7 @@ from transaccion_service import TransaccionService
 from cobro_cuota_manejo import CobroCuotaManejo
 from tarjeta_credito import TarjetaCredito
 from credito_vivienda import CreditoVivienda
+from transferencia_otro_banco import TransferenciaOtroBanco
 
 def main():
     ana = CuentaAhorros("001-1", "Ana", 2_000_000)
@@ -14,7 +15,12 @@ def main():
     cdt_ana = CDT("CDT-9", "Ana", 10_000_000, date(2026, 9, 30))
 
     servicio = TransaccionService()
-    servicio.transferir(ana, luis, 150_000, "OTRO_BANCO")
+    servicio.transferir(
+        ana,
+        luis,
+        150_000,
+        TransferenciaOtroBanco()
+    )
 
     CobroCuotaManejo().cobrar_mensual([ana, luis])
 

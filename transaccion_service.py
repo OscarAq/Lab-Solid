@@ -6,7 +6,7 @@ from validador_transferencia import ValidadorTransferencia
 from calculador_comision import CalculadorComision
 from generador_comprobante import GeneradorComprobante
 from auditor_transferencia import AuditorTransferencia
-
+from tipo_transferencia import TipoTransferencia
 
 class TransaccionService:
     def __init__(self):
@@ -23,7 +23,7 @@ class TransaccionService:
         origen: Cuenta,
         destino: Cuenta,
         monto: float,
-        tipo: str
+        tipo: TipoTransferencia
     ) -> None:
 
         # 1. Validación
@@ -60,7 +60,7 @@ class TransaccionService:
 
         # 7. Auditoría
         self._auditor.registrar(
-            tipo,
+            tipo.nombre(),
             origen,
             destino,
             monto

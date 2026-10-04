@@ -3,6 +3,10 @@ Repositorio para el Laboratorio de SOLID de la materia Ingeniería de Software I
 
 **Lenguaje elegido:** Python (traducción 1:1 del código base en Java, conservando los defectos de diseño).
 
+## Miembros del Equipo de trabajo
+
+* Pablo Andres Niño Barreto (pninob@unal.edu.co)
+* Sergio Tovar Vasquez (setovarv@unal.edu.co)
 ## Commit Inicial (Bloque 0)
 Se subió el bloque 0 del laboratorio, que incluye la traducción de los códigos del laboratorio, originalmente en Java y traducidos a Python. La salida del programa principal quedó congelada en `salida_original.txt` como prueba de caracterización.
 
@@ -251,3 +255,30 @@ TransaccionService
 ├── AuditorTransferencia
 ├── OracleRepositorio
 └── SmsGateway
+
+
+### Punto de Control O — Open/Closed Principle
+
+En el código original, el cálculo de la comisión dependía de una
+estructura condicional que verificaba el tipo de transferencia.
+Para agregar un nuevo tipo era necesario modificar el código
+existente de `CalculadorComision`.
+
+Para aplicar el principio Abierto/Cerrado (OCP), se creó la
+abstracción `TipoTransferencia`, que define el comportamiento que
+debe tener cada tipo de transferencia.
+
+Se implementaron las siguientes clases:
+
+- `TransferenciaMismoBanco`
+- `TransferenciaOtroBanco`
+- `TransferenciaInternacional`
+
+Cada una implementa su propia forma de calcular la comisión.
+
+`CalculadorComision` ahora depende de la abstracción
+`TipoTransferencia` y simplemente delega en ella el cálculo:
+
+```python
+def calcular(self, monto: float, tipo: TipoTransferencia) -> float:
+    return tipo.calcular_comision(monto)
