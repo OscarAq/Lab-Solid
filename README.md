@@ -255,7 +255,7 @@ TransaccionService
 ├── AuditorTransferencia
 ├── OracleRepositorio
 └── SmsGateway
-
+```
 
 ### Punto de Control O — Open/Closed Principle
 
@@ -282,6 +282,7 @@ Cada una implementa su propia forma de calcular la comisión.
 ```python
 def calcular(self, monto: float, tipo: TipoTransferencia) -> float:
     return tipo.calcular_comision(monto)
+```
 
 ## Control L — Sustitución de la jerarquía de cuentas
 
@@ -305,3 +306,4 @@ Cuenta
    │      └── CuentaAhorros
    │
    └── CDT
+```
