@@ -45,7 +45,7 @@ Hay al menos un problema por cada letra de SOLID; algunas clases acumulan varios
 
 **Qué hicimos:** agregamos el CDT de Ana a la lista de `CobroCuotaManejo.cobrar_mensual`. El script está en `experimentos/experimento1_cdt.py`.
 
-> ⚠️ **Nota de fidelidad:** en `main.py` el CDT se crea con `vencimiento=date(2026, 9, 30)`, una fecha **ya vencida** hoy; eso haría que el CDT se comporte como "ya liberado" y el experimento **no** fallaría. El Java original usa `LocalDate.now().plusMonths(6)` (siempre a futuro). Para que el experimento sea fiel al enunciado, el script usa un CDT **no vencido** (`date.today() + 180 días`). *Recomendación:* corregir esa fecha en `main.py` para que la traducción sea fiel (ver nota al final).
+> **Nota de fidelidad:** en `main.py` el CDT se crea con `vencimiento=date(2026, 9, 30)`, una fecha **ya vencida** hoy; eso haría que el CDT se comporte como "ya liberado" y el experimento **no** fallaría. El Java original usa `LocalDate.now().plusMonths(6)` (siempre a futuro). Para que el experimento sea fiel al enunciado, el script usa un CDT **no vencido** (`date.today() + 180 días`). *Recomendación:* corregir esa fecha en `main.py` para que la traducción sea fiel (ver nota al final).
 
 **Qué pasa (traceback real):**
 
@@ -412,3 +412,71 @@ Se implementaron las cinco pruebas solicitadas:
 Las cinco pruebas fueron ejecutadas mediante `pytest`:
 
 ![Resultado de las 5 pruebas](tests/SS_5_tests.jpg)
+## Bloque 4 — Nuevos requerimientos de negocio
+
+En este bloque se aplicaron cinco requerimientos de negocio sobre el código ya refactorizado. El objetivo era comprobar que, gracias al diseño SOLID, cada cambio se resuelve agregando clases nuevas y afectando la menor cantidad posible de código existente, sin volver a tocar la lógica central de `TransaccionService`.
+
+A diferencia del Bloque 2, aquí la salida del programa **sí cambia respecto a `salida_original.txt`**, porque los requerimientos agregan comportamiento nuevo (notificación push, reporte antifraude, persistencia en PostgreSQL). Lo que no cambia son las pruebas unitarias del Bloque 3, que siguen pasando sin modificación alguna (criterio de aceptación de R5).
+
+### R1 — Transferencias por llave
+
+Se agregó la clase `TransferenciaLlave`, que implementa la abstracción `TipoTransferencia` con comisión de `$0`. No se modificó ninguna clase existente: se aprovechó el patrón Estrategia introducido en el Punto de control O del Bloque 2. La búsqueda de la cuenta a partir de la llave no se implementa, según lo indicado en el enunciado.
+
+- Clases nuevas: `transferencia_llave.py`
+- Clases modificadas: ninguna (solo el armado de la demostración en `main.py`)
+
+Criterio de aceptación verificado: una transferencia de tipo `LLAVE` por `$50.000` descuenta exactamente `$50.000` de la cuenta de origen (comisión `$0`).
+
+### R2 — Cuenta infantil
+
+Se agregó la clase `CuentaInfantil`, que hereda de `CuentaRetirable`. Recibe depósitos sin límite y limita los retiros a `$200.000` en un mismo día, llevando un acumulado diario que se reinicia al cambiar la fecha. Al heredar de `CuentaRetirable` puede usarse como origen de transferencias y se le cobra la cuota de manejo como a cualquier cuenta retirable.
+
+- Clases nuevas: `cuenta_infantil.py`
+- Clases modificadas: ninguna
+
+Criterio de aceptación verificado: si la cuenta ya retiró `$150.000` hoy, un retiro de `$60.000` se rechaza (`$150.000 + $60.000 > $200.000`) y el saldo no cambia.
+
+### R3 — Notificaciones push
+
+Se agregó `PushNotifier`, que implementa la misma abstracción `Notificador` que `SmsGateway`, y `NotificadorCompuesto`, que aplica el patrón Composite para agrupar varios notificadores y tratarlos como uno solo. En `main.py` se inyecta `NotificadorCompuesto([SmsGateway(), PushNotifier()])`. Gracias a esto, **`TransaccionService` no cambia**: sigue recibiendo un único `Notificador`.
+
+- Clases nuevas: `push_notifier.py`, `notificador_compuesto.py`
+- Clases modificadas: ninguna (solo el armado en `main.py`)
+
+Criterio de aceptación verificado: por cada transferencia exitosa aparecen en consola un mensaje `[SMS]` y un mensaje `[PUSH]`.
+
+### R4 — Sistema antifraude
+
+Se agregó la abstracción `ObservadorTransaccion` y la clase `AntifraudeService`, que la implementa y reporta cada transacción exitosa (mensaje `[ANTIFRAUDE]`). `TransaccionService` recibe una lista opcional de observadores y los invoca al final del flujo, después de la auditoría, solo cuando la transferencia fue exitosa. El parámetro es opcional y por defecto una lista vacía, de modo que la auditoría actual se mantiene y las pruebas del Bloque 3 no cambian.
+
+- Clases nuevas: `observador_transaccion.py`, `antifraude_service.py`
+- Clases modificadas: `transaccion_service.py` (se añadió un punto de extensión por observadores, sin alterar el cálculo central)
+
+Criterio de aceptación verificado: por cada transferencia exitosa aparecen un mensaje `[AUDITORIA]` y uno `[ANTIFRAUDE]`; una transferencia rechazada no genera ninguno de los dos, porque el servicio lanza la excepción antes de llegar a ese punto.
+
+### R5 — Migración a PostgreSQL
+
+Se agregó `PostgresRepositorio`, que implementa la misma abstracción `RepositorioTransacciones` que `OracleRepositorio`. La migración consistió únicamente en inyectar la nueva clase en lugar de la de Oracle desde `main.py`. La clase `OracleRepositorio` se conserva intacta por si hay que devolverse durante la migración.
+
+- Clases nuevas: `postgres_repositorio.py`
+- Clases modificadas: ninguna (`OracleRepositorio` no se toca; solo el armado en `main.py`)
+
+Criterio de aceptación verificado: el programa guarda en PostgreSQL (mensaje `[POSTGRES]`) y las cinco pruebas unitarias del Bloque 3 siguen pasando sin cambios.
+
+### Tabla: estimación vs. realidad de archivos modificados
+
+La columna de estimación corresponde a cuántos archivos habría que tocar en el **código original** (monolítico) del Bloque 0, donde casi todo pasaba por la clase `TransaccionService`. La columna real corresponde a lo que efectivamente se hizo sobre el **código refactorizado**.
+
+| Req | Estimado en el código original | Real en el código refactorizado | Clase núcleo modificada |
+|---|:---:|---|:---:|
+| R1 | 1 (modificar el `switch` de comisiones en `TransaccionService`) | 1 clase nueva, 0 clases modificadas | No |
+| R2 | 1–2 (nueva clase + ajustes en la jerarquía de cuentas) | 1 clase nueva, 0 clases modificadas | No |
+| R3 | 2 (modificar `TransaccionService` + nueva clase push) | 2 clases nuevas, 0 clases modificadas | No |
+| R4 | 2 (modificar `TransaccionService` + nueva clase antifraude) | 2 clases nuevas, 1 clase modificada (punto de extensión) | Sí (aditivo) |
+| R5 | 2 (modificar `TransaccionService`/`main` + nueva clase repositorio) | 1 clase nueva, 0 clases modificadas | No |
+
+En el código original, cuatro de los cinco requerimientos (R1, R3, R4, R5) habrían obligado a modificar la misma clase central `TransaccionService`, con el riesgo de romper lo que ya funcionaba. En el código refactorizado, cuatro de los cinco se resolvieron **solo agregando clases nuevas**, sin tocar ninguna clase núcleo. El único cambio sobre `TransaccionService` (R4) fue aditivo: un parámetro opcional que no altera el cálculo central ni rompe las pruebas existentes. Los cambios restantes se concentraron en `main.py`, que es el punto de armado (composición) del sistema y donde es legítimo decidir qué implementaciones concretas se inyectan.
+
+### Commits del bloque
+
+`req-1`, `req-2`, `req-3`, `req-4`, `req-5`.
