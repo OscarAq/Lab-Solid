@@ -201,7 +201,7 @@ Cuenta
    │
    └── CDT
 ```
-### Control I — Interface Segregation Principle (ISP)
+### Punto de Control I — Interface Segregation Principle (ISP)
 
 #### Problema encontrado
 
@@ -225,7 +225,7 @@ class ProductoBancario(ABC):
     def generar_extracto(self) -> str:
         pass
 ```
-### Control D — Dependency Inversion Principle (DIP)
+### Punto de Control D — Dependency Inversion Principle (DIP)
 
 #### Problema encontrado
 
