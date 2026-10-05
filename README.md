@@ -412,6 +412,107 @@ Se implementaron las cinco pruebas solicitadas:
 Las cinco pruebas fueron ejecutadas mediante `pytest`:
 
 ![Resultado de las 5 pruebas](tests/SS_5_tests.jpg)
+## Documentación de ejecución
+
+### Requisitos
+
+El proyecto utiliza **Python 3** y `pytest` para las pruebas unitarias. No se requiere una base de datos PostgreSQL real ni un proveedor real de SMS/PUSH: las integraciones de persistencia y notificación están simuladas mediante mensajes en consola.
+
+### Ejecutar el programa principal
+
+Desde la raíz del proyecto se ejecuta:
+
+```powershell
+python main.py
+```
+
+La ejecución demuestra los escenarios principales del Bloque 4:
+
+- **R1:** transferencia por llave de `$50.000` con comisión `$0`.
+- **R2:** transferencia desde una cuenta infantil y rechazo de un segundo retiro que supera el límite diario de `$200.000`.
+- **R3:** una transferencia exitosa genera mensajes `[SMS]` y `[PUSH]`.
+- **R4:** una transferencia exitosa genera `[AUDITORIA]` y `[ANTIFRAUDE]`.
+- **R5:** la persistencia se simula mediante mensajes `[POSTGRES]`.
+
+En la ejecución realizada, R1 descontó exactamente `$50.000`; la cuenta infantil realizó un primer retiro de `$120.000` y rechazó un segundo retiro de `$100.000`, manteniendo el saldo en `$880.000`. Las transferencias exitosas mostraron `[SMS]`, `[PUSH]`, `[AUDITORIA]`, `[ANTIFRAUDE]` y `[POSTGRES]`.
+
+### Ejecutar las pruebas unitarias
+
+Las pruebas oficiales del Bloque 3 se ejecutan con:
+
+```powershell
+python -m pytest tests -v
+```
+
+El resultado esperado y obtenido es **5 pruebas aprobadas**. Las pruebas utilizan dobles de prueba para el repositorio y el notificador, por lo que no necesitan Oracle ni un servicio de SMS real.
+
+> **Nota sobre `experimentos/test_prueba_imposible.py`:** si se ejecuta `python -m pytest` sin indicar la carpeta `tests`, pytest también descubre ese archivo experimental. Su objetivo es documentar la prueba imposible del Bloque 1 y utiliza la antigua construcción de `TransaccionService()` sin inyección de dependencias; por ello no forma parte de las cinco pruebas oficiales del Bloque 3.
+
+### Evidencias de ejecución
+
+La evidencia de las cinco pruebas unitarias se encuentra en `tests/SS_5_tests.jpg`. La salida de `main.py` permite comprobar visualmente los criterios de aceptación de R1 a R5.
+
+## Respuestas a las preguntas del laboratorio
+
+### Control S — Single Responsibility Principle
+
+**Pregunta:** Después del cambio, describan en una frase qué hace `TransaccionService`. ¿Aparece la palabra “y”? Si el área legal pide cambiar el formato del comprobante, ¿qué archivo tocan?
+
+**Respuesta:** `TransaccionService` coordina el flujo de una transferencia: valida, calcula la comisión, mueve el dinero y delega la persistencia, el comprobante, las notificaciones y la auditoría en componentes especializados. La palabra “y” puede aparecer al describir el flujo, pero ya no representa múltiples responsabilidades implementadas directamente en el mismo método. Si el área legal cambia el formato del comprobante, se modifica `generador_comprobante.py`, sin tocar la lógica central de la transferencia.
+
+### Control O — Open/Closed Principle
+
+**Pregunta:** Si mañana llega un tipo de transferencia nuevo, ¿qué archivos existentes tendrían que modificar? Enumérenlos. Lo ideal es que solo aparezca el punto donde se arma el sistema.
+
+**Respuesta:** Se crea una nueva clase que implemente `TipoTransferencia`, siguiendo el mismo esquema de `TransferenciaMismoBanco`, `TransferenciaOtroBanco`, `TransferenciaInternacional` y `TransferenciaLlave`. La lógica de `CalculadorComision` y `TransaccionService` no necesita modificarse. Para utilizar el nuevo tipo en una demostración concreta, se modifica el punto de composición (`main.py`) donde se arma el sistema.
+
+### Control L — Sustitución de Liskov
+
+**Pregunta:** ¿Su solución detecta el error al compilar (o con el verificador de tipos) o al ejecutar? ¿Por qué es mejor lo primero? Si alguien propone “envolver el retiro en un `try/catch` e ignorar los CDT”, ¿por qué eso no resuelve el problema de diseño?
+
+**Respuesta:** En Python, la incompatibilidad del contrato se manifiesta al ejecutar: el problema original aparece cuando un `CDT` recibe una llamada a `retirar()` y lanza una excepción. La solución refactorizada separa las cuentas retirables mediante `CuentaRetirable`, por lo que `CobroCuotaManejo` trabaja con una abstracción que garantiza la capacidad necesaria. Detectar un problema antes de ejecutar es preferible porque evita que una operación inválida llegue a producción. Envolver el retiro en `try/catch` (o `try/except`) y simplemente ignorar los CDT no corrige el contrato: solo oculta el error y deja un proceso parcialmente ejecutado.
+
+### Control I — Interface Segregation Principle
+
+**Pregunta:** ¿Pudieron lograr que un mismo generador de extractos funcione para cuentas, tarjetas y créditos a la vez? ¿Qué interfaz necesitó para eso, y por qué no necesitó conocer los demás métodos de cada producto?
+
+**Respuesta:** Sí. Se separaron las capacidades de `ProductoBancario` en interfaces pequeñas, entre ellas `ProductoDepositable`, `ProductoRetirable`, `ProductoConIntereses` y `ProductoConCuota`. `GeneradorExtractos` utiliza únicamente la capacidad que necesita para generar el extracto. De esta manera no necesita conocer ni depender de métodos de otras capacidades que no correspondan al producto.
+
+### Control D — Dependency Inversion Principle
+
+**Pregunta:** ¿Cuántas clases concretas conoce ahora `TransaccionService`? ¿Quién decide si se usa Oracle o si se notifica por SMS? Vuelvan al experimento 2 del bloque 1: ¿ya es posible esa prueba?
+
+**Respuesta:** `TransaccionService` depende de abstracciones como `RepositorioTransacciones` y `Notificador`, además de los componentes especializados que recibe por inyección. Ya no crea directamente `OracleRepositorio` ni `SmsGateway`. La decisión de usar PostgreSQL, Oracle, SMS o PUSH se realiza en `main.py`, que es el punto de composición. Sí es posible realizar la prueba sin Oracle ni SMS: las cinco pruebas del Bloque 3 utilizan `FakeRepositorio` y `FakeNotificador` y pasan correctamente.
+
+### Bloque 3 — Pruebas unitarias
+
+**Pregunta:** ¿Cuánto tardan en ejecutarse todas sus pruebas? ¿Cuántas líneas de `TransaccionService` tuvieron que cambiar para poder probarla? ¿Qué habría pasado si intentaran estas mismas pruebas en el bloque 1?
+
+**Respuesta:** Las cinco pruebas oficiales se ejecutan en milisegundos; en la ejecución realizada se obtuvieron **5 pruebas aprobadas**. El cambio fundamental para hacer testeable `TransaccionService` fue reemplazar la creación interna de dependencias concretas por dependencias inyectadas mediante abstracciones. En el Bloque 1 las pruebas no podían aislarse correctamente: `TransaccionService` creaba `OracleRepositorio` y `SmsGateway` internamente, por lo que una prueba terminaba ejecutando esas integraciones en lugar de trabajar con dobles.
+
+## Cierre — Respuestas de reflexión
+
+### a) ¿El código final tiene muchos más archivos que el original? ¿Es eso un problema? ¿En qué situación sí lo sería?
+
+**Respuesta:** No necesariamente. El código final tiene más archivos porque las responsabilidades y capacidades que antes estaban concentradas en pocas clases fueron separadas en componentes especializados. Esto mejora la mantenibilidad y permite extender el sistema con cambios más localizados. Sí sería un problema si la cantidad de clases aumentara sin representar responsabilidades reales, si las abstracciones no aportaran valor o si el sistema se volviera más difícil de entender y mantener.
+
+### b) ¿En qué requerimiento del Bloque 4 se notó más la diferencia entre el código original y el refactorizado? ¿Por qué?
+
+**Respuesta:** La diferencia se nota especialmente en **R3 y R5**, porque ambos requerimientos permiten aprovechar directamente las abstracciones creadas durante el refactor. En R3 se agregó `PushNotifier` y `NotificadorCompuesto` sin modificar la lógica de transferencia. En R5 se agregó `PostgresRepositorio` como otra implementación de `RepositorioTransacciones` y se cambió únicamente la composición del sistema. En el diseño original, estos cambios habrían obligado a modificar la clase central `TransaccionService`, que conocía directamente las implementaciones concretas.
+
+### c) ¿Hubo algún requerimiento que su diseño no aguantó bien? ¿Qué cambiarían?
+
+**Respuesta:** El requerimiento que más exigió una modificación de una clase existente fue **R4**, porque fue necesario agregar a `TransaccionService` el punto de extensión para los observadores de transacciones. Sin embargo, el cambio fue aditivo, opcional y no rompió las cinco pruebas existentes. Para reducir todavía más la responsabilidad del servicio, una posible mejora sería encapsular la publicación de eventos de transferencia exitosa en un componente dedicado, de manera que `TransaccionService` solo coordine el flujo y delegue completamente la notificación de eventos.
+
+### d) ¿Qué les dijo la otra pareja en la revisión cruzada? ¿Están de acuerdo?
+
+**Respuesta:** La otra pareja menciono que ....
+
+### e) Si tuvieran que convencer a su jefe de invertir dos semanas en refactorizar el backend real del banco, ¿qué argumento usarían, basándose en los datos de hoy?
+
+**Respuesta:** El argumento principal sería que la refactorización reduce el costo y el riesgo de los cambios futuros. En el Bloque 4 se implementaron cinco requerimientos y la mayoría se resolvieron agregando clases nuevas, sin modificar la lógica central de `TransaccionService`. Además, las cinco pruebas unitarias continuaron pasando y pudieron ejecutarse sin Oracle ni SMS. Esto permite cambiar infraestructura y agregar capacidades con menor impacto sobre el código que ya funciona y con una red de pruebas que detecta regresiones rápidamente.
+
+
 ## Bloque 4 — Nuevos requerimientos de negocio
 
 En este bloque se aplicaron cinco requerimientos de negocio sobre el código ya refactorizado. El objetivo era comprobar que, gracias al diseño SOLID, cada cambio se resuelve agregando clases nuevas y afectando la menor cantidad posible de código existente, sin volver a tocar la lógica central de `TransaccionService`.
@@ -477,6 +578,6 @@ La columna de estimación corresponde a cuántos archivos habría que tocar en e
 
 En el código original, cuatro de los cinco requerimientos (R1, R3, R4, R5) habrían obligado a modificar la misma clase central `TransaccionService`, con el riesgo de romper lo que ya funcionaba. En el código refactorizado, cuatro de los cinco se resolvieron **solo agregando clases nuevas**, sin tocar ninguna clase núcleo. El único cambio sobre `TransaccionService` (R4) fue aditivo: un parámetro opcional que no altera el cálculo central ni rompe las pruebas existentes. Los cambios restantes se concentraron en `main.py`, que es el punto de armado (composición) del sistema y donde es legítimo decidir qué implementaciones concretas se inyectan.
 
-### Commits del bloque
+### Commits del bloque 4
 
 `req-1`, `req-2`, `req-3`, `req-4`, `req-5`.
