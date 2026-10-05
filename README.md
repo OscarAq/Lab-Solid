@@ -898,7 +898,25 @@ mediante nuevas clases.
 
 #### d) ¿Qué les dijo la otra pareja en la revisión cruzada? ¿Están de acuerdo?
 
-**Respuesta:** La otra pareja menciono que .... 
+**Respuesta:** La otra pareja nos dio una opinión bastante positiva sobre el resultado del
+proyecto. Destacaron que la refactorización no consistió solamente en separar
+archivos, sino que realmente se aplicaron los principios SOLID. En especial,
+mencionaron la separación de responsabilidades de `TransaccionService`, el
+uso de `TipoTransferencia`, la solución del problema del CDT mediante
+`CuentaRetirable` y la facilidad para agregar los requerimientos del bloque 4
+sin modificar demasiado la lógica existente.
+
+También nos recomendaron fortalecer las pruebas automatizadas para algunos de
+los nuevos requerimientos, como `CuentaInfantil`, `NotificadorCompuesto`,
+`AntifraudeService` y `PostgresRepositorio`. Además, nos señalaron algunas
+inconsistencias que deberíamos revisar en el README, principalmente en las
+métricas y en la descripción de los archivos modificados durante el bloque 4.
+
+Estamos de acuerdo con sus observaciones. Consideramos que la revisión fue
+útil porque nos permitió ver que, aunque el diseño cumple con los objetivos del
+laboratorio, todavía hay aspectos que podemos mejorar, especialmente en la
+cobertura de pruebas y en mantener la documentación completamente alineada con
+el estado final del código.
 
 #### e) Si tuvieran que convencer a su jefe de invertir dos semanas en refactorizar el backend real del banco, ¿qué argumento usarían, basándose en los datos de hoy?
 
