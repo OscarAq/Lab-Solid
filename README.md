@@ -66,6 +66,110 @@ Se cobra la cuota a `001-1` (Ana), el proceso llega al CDT, invoca `retirar()`, 
 
 **Qué pasaría en producción:** si el batch corre de noche sobre **un millón de cuentas** y la cuenta número **500 000 es un CDT**, el proceso cobra correctamente las primeras 499 999, explota en la 500 000 y **deja sin cobrar las 500 000 restantes**. Resultado: cierre contable inconsistente (medio banco cobrado, medio no) y una falla que probablemente nadie note hasta la conciliación. Un único dato "raro" tumba todo el proceso.
 
+## 1.3 Diagrama de clases del código original
+
+```mermaid
+classDiagram
+    direction TB
+
+    class Cuenta {
+        <<class>>
+        -numero
+        -titular
+        -saldo
+        +depositar(monto)
+        +retirar(monto)
+    }
+
+    class CuentaAhorros {
+        <<class>>
+    }
+
+    class CDT {
+        <<class>>
+        -vencimiento
+        +retirar(monto)
+    }
+
+    class ProductoBancario {
+        <<interface>>
+        +depositar(monto)
+        +retirar(monto)
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    class TarjetaCredito {
+        <<class>>
+        -cupo
+        -deuda
+        +depositar(monto)
+        +retirar(monto)
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    class CreditoVivienda {
+        <<class>>
+        -saldo_pendiente
+        +depositar(monto)
+        +retirar(monto)
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    class TransaccionService {
+        <<class>>
+        -repositorio
+        -sms
+        +transferir(origen,destino,monto,tipo)
+    }
+
+    class OracleRepositorio {
+        <<class>>
+        +guardar_transaccion(origen,destino,monto,comision)
+    }
+
+    class SmsGateway {
+        <<class>>
+        +enviar(destinatario,mensaje)
+    }
+
+    class CobroCuotaManejo {
+        <<class>>
+        +cobrar_mensual(cuentas)
+    }
+
+    class Main {
+        <<class>>
+        +main()
+    }
+
+    %% Herencia
+    Cuenta <|-- CuentaAhorros
+    Cuenta <|-- CDT
+
+    ProductoBancario <|.. TarjetaCredito
+    ProductoBancario <|.. CreditoVivienda
+
+    %% Dependencias problemáticas
+    TransaccionService ..> OracleRepositorio : crea con new
+    TransaccionService ..> SmsGateway : crea con new
+
+    TransaccionService ..> Cuenta : utiliza
+    CobroCuotaManejo ..> Cuenta : llama retirar()
+
+    Main ..> TransaccionService : crea
+    Main ..> CuentaAhorros : crea
+    Main ..> CDT : crea
+    Main ..> TarjetaCredito : crea
+    Main ..> CreditoVivienda : crea
+    Main ..> CobroCuotaManejo : crea
+```
+
 #### Experimento 2 — La prueba imposible
 
 **Qué intentamos:** escribir una prueba que verifique que una transferencia a otro banco cobra $7 500 de comisión, **sin conectarse a Oracle ni enviar SMS**. El script está en `experimentos/test_prueba_imposible.py`.
@@ -490,29 +594,6 @@ La evidencia de las cinco pruebas unitarias se encuentra en `tests/SS_5_tests.jp
 
 **Respuesta:** Las cinco pruebas oficiales se ejecutan en milisegundos; en la ejecución realizada se obtuvieron **5 pruebas aprobadas**. El cambio fundamental para hacer testeable `TransaccionService` fue reemplazar la creación interna de dependencias concretas por dependencias inyectadas mediante abstracciones. En el Bloque 1 las pruebas no podían aislarse correctamente: `TransaccionService` creaba `OracleRepositorio` y `SmsGateway` internamente, por lo que una prueba terminaba ejecutando esas integraciones en lugar de trabajar con dobles.
 
-## Cierre — Respuestas de reflexión
-
-### a) ¿El código final tiene muchos más archivos que el original? ¿Es eso un problema? ¿En qué situación sí lo sería?
-
-**Respuesta:** No necesariamente. El código final tiene más archivos porque las responsabilidades y capacidades que antes estaban concentradas en pocas clases fueron separadas en componentes especializados. Esto mejora la mantenibilidad y permite extender el sistema con cambios más localizados. Sí sería un problema si la cantidad de clases aumentara sin representar responsabilidades reales, si las abstracciones no aportaran valor o si el sistema se volviera más difícil de entender y mantener.
-
-### b) ¿En qué requerimiento del Bloque 4 se notó más la diferencia entre el código original y el refactorizado? ¿Por qué?
-
-**Respuesta:** La diferencia se nota especialmente en **R3 y R5**, porque ambos requerimientos permiten aprovechar directamente las abstracciones creadas durante el refactor. En R3 se agregó `PushNotifier` y `NotificadorCompuesto` sin modificar la lógica de transferencia. En R5 se agregó `PostgresRepositorio` como otra implementación de `RepositorioTransacciones` y se cambió únicamente la composición del sistema. En el diseño original, estos cambios habrían obligado a modificar la clase central `TransaccionService`, que conocía directamente las implementaciones concretas.
-
-### c) ¿Hubo algún requerimiento que su diseño no aguantó bien? ¿Qué cambiarían?
-
-**Respuesta:** El requerimiento que más exigió una modificación de una clase existente fue **R4**, porque fue necesario agregar a `TransaccionService` el punto de extensión para los observadores de transacciones. Sin embargo, el cambio fue aditivo, opcional y no rompió las cinco pruebas existentes. Para reducir todavía más la responsabilidad del servicio, una posible mejora sería encapsular la publicación de eventos de transferencia exitosa en un componente dedicado, de manera que `TransaccionService` solo coordine el flujo y delegue completamente la notificación de eventos.
-
-### d) ¿Qué les dijo la otra pareja en la revisión cruzada? ¿Están de acuerdo?
-
-**Respuesta:** La otra pareja menciono que ....
-
-### e) Si tuvieran que convencer a su jefe de invertir dos semanas en refactorizar el backend real del banco, ¿qué argumento usarían, basándose en los datos de hoy?
-
-**Respuesta:** El argumento principal sería que la refactorización reduce el costo y el riesgo de los cambios futuros. En el Bloque 4 se implementaron cinco requerimientos y la mayoría se resolvieron agregando clases nuevas, sin modificar la lógica central de `TransaccionService`. Además, las cinco pruebas unitarias continuaron pasando y pudieron ejecutarse sin Oracle ni SMS. Esto permite cambiar infraestructura y agregar capacidades con menor impacto sobre el código que ya funciona y con una red de pruebas que detecta regresiones rápidamente.
-
-
 ## Bloque 4 — Nuevos requerimientos de negocio
 
 En este bloque se aplicaron cinco requerimientos de negocio sobre el código ya refactorizado. El objetivo era comprobar que, gracias al diseño SOLID, cada cambio se resuelve agregando clases nuevas y afectando la menor cantidad posible de código existente, sin volver a tocar la lógica central de `TransaccionService`.
@@ -581,3 +662,451 @@ En el código original, cuatro de los cinco requerimientos (R1, R3, R4, R5) habr
 ### Commits del bloque 4
 
 `req-1`, `req-2`, `req-3`, `req-4`, `req-5`.
+
+
+## Bloque 6 - Cierre 
+
+### Diagrama código inicial
+```mermaid
+classDiagram
+    direction TB
+
+    class Cuenta {
+        <<class>>
+        -numero
+        -titular
+        -saldo
+        +depositar(monto)
+        +retirar(monto)
+    }
+
+    class CuentaAhorros {
+        <<class>>
+    }
+
+    class CDT {
+        <<class>>
+        -vencimiento
+        +retirar(monto)
+    }
+
+    class ProductoBancario {
+        <<interface>>
+        +depositar(monto)
+        +retirar(monto)
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    class TarjetaCredito {
+        <<class>>
+        -cupo
+        -deuda
+        +depositar(monto)
+        +retirar(monto)
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    class CreditoVivienda {
+        <<class>>
+        -saldo_pendiente
+        +depositar(monto)
+        +retirar(monto)
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    class TransaccionService {
+        <<class>>
+        -repositorio
+        -sms
+        +transferir(origen,destino,monto,tipo)
+    }
+
+    class OracleRepositorio {
+        <<class>>
+        +guardar_transaccion(origen,destino,monto,comision)
+    }
+
+    class SmsGateway {
+        <<class>>
+        +enviar(destinatario,mensaje)
+    }
+
+    class CobroCuotaManejo {
+        <<class>>
+        +cobrar_mensual(cuentas)
+    }
+
+    class Main {
+        <<class>>
+        +main()
+    }
+
+    %% Herencia
+    Cuenta <|-- CuentaAhorros
+    Cuenta <|-- CDT
+
+    ProductoBancario <|.. TarjetaCredito
+    ProductoBancario <|.. CreditoVivienda
+
+    %% Dependencias problemáticas
+    TransaccionService ..> OracleRepositorio : crea con new
+    TransaccionService ..> SmsGateway : crea con new
+
+    TransaccionService ..> Cuenta : utiliza
+    CobroCuotaManejo ..> Cuenta : llama retirar()
+
+    Main ..> TransaccionService : crea
+    Main ..> CuentaAhorros : crea
+    Main ..> CDT : crea
+    Main ..> TarjetaCredito : crea
+    Main ..> CreditoVivienda : crea
+    Main ..> CobroCuotaManejo : crea
+```
+
+
+### Diagrama UML Código Final
+
+```mermaid
+classDiagram
+    direction TB
+
+    %% =========================
+    %% CUENTAS
+    %% =========================
+
+    class ProductoBancario {
+        <<abstract>>
+        +generar_extracto()
+    }
+
+    class Cuenta {
+        <<class>>
+        -numero
+        -titular
+        -saldo
+        +get_numero()
+        +get_titular()
+        +get_saldo()
+        +depositar(monto)
+        +generar_extracto()
+    }
+
+    class CuentaRetirable {
+        <<class>>
+        +retirar(monto)
+    }
+
+    class CuentaAhorros {
+        <<class>>
+    }
+
+    class CuentaInfantil {
+        <<class>>
+        -LIMITE_DIARIO
+        -retirado_hoy
+        -fecha_retiro
+        +retirar(monto)
+    }
+
+    class CDT {
+        <<class>>
+        -vencimiento
+    }
+
+    ProductoBancario <|-- Cuenta
+    Cuenta <|-- CuentaRetirable
+    CuentaRetirable <|-- CuentaAhorros
+    CuentaRetirable <|-- CuentaInfantil
+    Cuenta <|-- CDT
+
+    %% =========================
+    %% PRODUCTOS / ISP
+    %% =========================
+
+    class ProductoDepositable {
+        <<interface>>
+        +depositar(monto)
+    }
+
+    class ProductoRetirable {
+        <<interface>>
+        +retirar(monto)
+    }
+
+    class ProductoConIntereses {
+        <<interface>>
+        +calcular_intereses()
+    }
+
+    class ProductoConCuota {
+        <<interface>>
+        +pagar_cuota(monto)
+    }
+
+    class TarjetaCredito {
+        <<class>>
+        -cupo
+        -deuda
+        +retirar(monto)
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    class CreditoVivienda {
+        <<class>>
+        -saldo_pendiente
+        +calcular_intereses()
+        +pagar_cuota(monto)
+        +generar_extracto()
+    }
+
+    ProductoBancario <|-- TarjetaCredito
+    ProductoRetirable <|.. TarjetaCredito
+    ProductoConIntereses <|.. TarjetaCredito
+    ProductoConCuota <|.. TarjetaCredito
+
+    ProductoBancario <|-- CreditoVivienda
+    ProductoConIntereses <|.. CreditoVivienda
+    ProductoConCuota <|.. CreditoVivienda
+
+    %% =========================
+    %% TRANSFERENCIAS
+    %% =========================
+
+    class TipoTransferencia {
+        <<interface>>
+        +calcular_comision(monto)
+        +nombre()
+    }
+
+    class TransferenciaMismoBanco {
+        +calcular_comision(monto)
+        +nombre()
+    }
+
+    class TransferenciaOtroBanco {
+        +calcular_comision(monto)
+        +nombre()
+    }
+
+    class TransferenciaInternacional {
+        +calcular_comision(monto)
+        +nombre()
+    }
+
+    class TransferenciaLlave {
+        +calcular_comision(monto)
+        +nombre()
+    }
+
+    TipoTransferencia <|.. TransferenciaMismoBanco
+    TipoTransferencia <|.. TransferenciaOtroBanco
+    TipoTransferencia <|.. TransferenciaInternacional
+    TipoTransferencia <|.. TransferenciaLlave
+
+    %% =========================
+    %% PERSISTENCIA - DIP
+    %% =========================
+
+    class RepositorioTransacciones {
+        <<interface>>
+        +guardar_transaccion(origen,destino,monto,comision)
+    }
+
+    class OracleRepositorio {
+        +guardar_transaccion(origen,destino,monto,comision)
+    }
+
+    class PostgresRepositorio {
+        +guardar_transaccion(origen,destino,monto,comision)
+    }
+
+    RepositorioTransacciones <|.. OracleRepositorio
+    RepositorioTransacciones <|.. PostgresRepositorio
+
+    %% =========================
+    %% NOTIFICACIONES
+    %% =========================
+
+    class Notificador {
+        <<interface>>
+        +enviar(destinatario,mensaje)
+    }
+
+    class SmsGateway {
+        +enviar(destinatario,mensaje)
+    }
+
+    class PushNotifier {
+        +enviar(destinatario,mensaje)
+    }
+
+    class NotificadorCompuesto {
+        -notificadores
+        +enviar(destinatario,mensaje)
+    }
+
+    Notificador <|.. SmsGateway
+    Notificador <|.. PushNotifier
+    Notificador <|.. NotificadorCompuesto
+
+    NotificadorCompuesto o-- Notificador : contiene
+
+    %% =========================
+    %% ANTIFRAUDE / OBSERVADOR
+    %% =========================
+
+    class ObservadorTransaccion {
+        <<interface>>
+        +registrar_transaccion(origen,destino,monto,comision,tipo)
+    }
+
+    class AntifraudeService {
+        +registrar_transaccion(origen,destino,monto,comision,tipo)
+    }
+
+    ObservadorTransaccion <|.. AntifraudeService
+
+    %% =========================
+    %% SERVICIOS
+    %% =========================
+
+    class ValidadorTransferencia {
+        -TOPE_DIARIO
+        +validar(monto)
+    }
+
+    class CalculadorComision {
+        +calcular(monto,tipo)
+    }
+
+    class GeneradorComprobante {
+        +generar(origen,destino,monto,comision)
+    }
+
+    class AuditorTransferencia {
+        +registrar(tipo,origen,destino,monto)
+    }
+
+    class GeneradorExtractos {
+        +generar(producto)
+    }
+
+    class CobroCuotaManejo {
+        -CUOTA
+        +cobrar_mensual(cuentas)
+    }
+
+    CalculadorComision ..> TipoTransferencia : utiliza
+    GeneradorExtractos ..> ProductoBancario : utiliza
+    CobroCuotaManejo ..> CuentaRetirable : utiliza
+
+    %% =========================
+    %% TRANSACCION SERVICE
+    %% =========================
+
+    class TransaccionService {
+        -repositorio
+        -notificador
+        -validador
+        -calculador_comision
+        -comprobante
+        -auditor
+        -observadores
+        +transferir(origen,destino,monto,tipo)
+    }
+
+    TransaccionService ..> RepositorioTransacciones : depende de
+    TransaccionService ..> Notificador : depende de
+    TransaccionService ..> ValidadorTransferencia : utiliza
+    TransaccionService ..> CalculadorComision : utiliza
+    TransaccionService ..> GeneradorComprobante : utiliza
+    TransaccionService ..> AuditorTransferencia : utiliza
+    TransaccionService ..> ObservadorTransaccion : utiliza
+    TransaccionService ..> CuentaRetirable : origen
+    TransaccionService ..> Cuenta : destino
+    TransaccionService ..> TipoTransferencia : recibe
+
+    %% =========================
+    %% MAIN - COMPOSICIÓN
+    %% =========================
+
+    class Main {
+        <<class>>
+        +main()
+    }
+
+    Main ..> TransaccionService : ensambla
+    Main ..> PostgresRepositorio : selecciona
+    Main ..> NotificadorCompuesto : configura
+    Main ..> SmsGateway : configura
+    Main ..> PushNotifier : configura
+    Main ..> AntifraudeService : configura
+
+```
+### Tabla comparativa
+
+La siguiente tabla compara el estado del sistema antes de la refactorización SOLID
+(Bloque 0/1) con el estado final después de los Bloques 2, 3 y 4.
+
+| Métrica | Antes | Después |
+|---|:---:|:---:|
+| Líneas del método `transferir` | **23 líneas de código** | **35 líneas de código** |
+| Razones distintas por las que `TransaccionService` podría cambiar | **7** | **1** |
+| Clases concretas que `TransaccionService` crea con `new` | **2** (`OracleRepositorio`, `SmsGateway`) | **0** |
+| Métodos vacíos o que lanzan "no aplica" | **4** (3 vacíos + 1 excepción) | **0** |
+| ¿Se puede probar `transferir` sin Oracle ni SMS? | **No** | **Sí** |
+| Número total de archivos | **11** | **34** |
+| Archivos existentes modificados en total en el Bloque 4 | **—** | **2** |
+
+#### Interpretación de los resultados
+
+La comparación muestra que, aunque el código final contiene más archivos,
+las responsabilidades están mejor distribuidas. `TransaccionService` dejó de
+crear directamente sus dependencias concretas y ahora trabaja mediante
+abstracciones inyectadas desde `main.py`.
+
+El número de razones de cambio de `TransaccionService` se redujo de siete,
+correspondientes a las diferentes responsabilidades que concentraba
+originalmente, a una responsabilidad principal: **coordinar el flujo de una
+transferencia**.
+
+También desaparecieron los métodos vacíos o con comportamientos de
+"no aplica", ya que las capacidades fueron separadas mediante abstracciones
+más pequeñas. Esto permite que cada producto bancario implemente únicamente
+las operaciones que realmente necesita.
+
+Finalmente, el código final puede probar `transferir` utilizando dobles de
+prueba (`FakeRepositorio` y `FakeNotificador`), sin depender de Oracle ni de
+SMS. En el Bloque 4 se modificaron únicamente **dos archivos existentes**:
+`main.py` y `transaccion_service.py`; el resto de los cambios se resolvieron
+mediante nuevas clases.
+
+### Respuestas a Preguntas de Reflexión
+
+#### a) ¿El código final tiene muchos más archivos que el original? ¿Es eso un problema? ¿En qué situación sí lo sería?
+
+**Respuesta:** No necesariamente. El código final tiene más archivos porque las responsabilidades y capacidades que antes estaban concentradas en pocas clases fueron separadas en componentes especializados. Esto mejora la mantenibilidad y permite extender el sistema con cambios más localizados. Sí sería un problema si la cantidad de clases aumentara sin representar responsabilidades reales, si las abstracciones no aportaran valor o si el sistema se volviera más difícil de entender y mantener.
+
+#### b) ¿En qué requerimiento del Bloque 4 se notó más la diferencia entre el código original y el refactorizado? ¿Por qué?
+
+**Respuesta:** La diferencia se nota especialmente en **R3 y R5**, porque ambos requerimientos permiten aprovechar directamente las abstracciones creadas durante el refactor. En R3 se agregó `PushNotifier` y `NotificadorCompuesto` sin modificar la lógica de transferencia. En R5 se agregó `PostgresRepositorio` como otra implementación de `RepositorioTransacciones` y se cambió únicamente la composición del sistema. En el diseño original, estos cambios habrían obligado a modificar la clase central `TransaccionService`, que conocía directamente las implementaciones concretas.
+
+#### c) ¿Hubo algún requerimiento que su diseño no aguantó bien? ¿Qué cambiarían?
+
+**Respuesta:** El requerimiento que más exigió una modificación de una clase existente fue **R4**, porque fue necesario agregar a `TransaccionService` el punto de extensión para los observadores de transacciones. Sin embargo, el cambio fue aditivo, opcional y no rompió las cinco pruebas existentes. Para reducir todavía más la responsabilidad del servicio, una posible mejora sería encapsular la publicación de eventos de transferencia exitosa en un componente dedicado, de manera que `TransaccionService` solo coordine el flujo y delegue completamente la notificación de eventos.
+
+#### d) ¿Qué les dijo la otra pareja en la revisión cruzada? ¿Están de acuerdo?
+
+**Respuesta:** La otra pareja menciono que .... 
+
+#### e) Si tuvieran que convencer a su jefe de invertir dos semanas en refactorizar el backend real del banco, ¿qué argumento usarían, basándose en los datos de hoy?
+
+**Respuesta:** El argumento principal sería que la refactorización reduce el costo y el riesgo de los cambios futuros. En el Bloque 4 se implementaron cinco requerimientos y la mayoría se resolvieron agregando clases nuevas, sin modificar la lógica central de `TransaccionService`. Además, las cinco pruebas unitarias continuaron pasando y pudieron ejecutarse sin Oracle ni SMS. Esto permite cambiar infraestructura y agregar capacidades con menor impacto sobre el código que ya funciona y con una red de pruebas que detecta regresiones rápidamente.
