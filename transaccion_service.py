@@ -7,16 +7,22 @@ from auditor_transferencia import AuditorTransferencia
 from tipo_transferencia import TipoTransferencia
 from repositorio_transacciones import RepositorioTransacciones
 from notificador import Notificador
+from observador_transaccion import ObservadorTransaccion
+from typing import List, Optional
 
 
 class TransaccionService:
-    def __init__(self,repositorio: RepositorioTransacciones,notificador: Notificador,validador: ValidadorTransferencia,calculador_comision: CalculadorComision,comprobante: GeneradorComprobante,auditor: AuditorTransferencia):
+    def __init__(self,repositorio: RepositorioTransacciones,notificador: Notificador,validador: ValidadorTransferencia,calculador_comision: CalculadorComision,comprobante: GeneradorComprobante,auditor: AuditorTransferencia,observadores: Optional[List[ObservadorTransaccion]] = None):
         self._repositorio = repositorio
         self._notificador = notificador
         self._validador = validador
         self._calculador_comision = calculador_comision
         self._comprobante = comprobante
         self._auditor = auditor
+        # Observadores de transacciones exitosas (R4: antifraude, etc.).
+        # Es opcional y por defecto una lista vacía, por lo que el codigo
+        # y las pruebas que ya existian siguen funcionando sin cambios.
+        self._observadores = observadores if observadores is not None else []
 
     def transferir(self,origen: CuentaRetirable,destino: Cuenta,monto: float,tipo: TipoTransferencia) -> None:
 
@@ -59,3 +65,13 @@ class TransaccionService:
             destino,
             monto
         )
+
+        # 8. Observadores de transacciones exitosas (R4: antifraude, etc.)
+        for observador in self._observadores:
+            observador.registrar_transaccion(
+                origen,
+                destino,
+                monto,
+                comision,
+                tipo.nombre()
+            )
